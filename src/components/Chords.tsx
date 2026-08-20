@@ -5,9 +5,9 @@
 
 import React from "react";
 import { motion } from "motion/react";
-import { CHORD_DICTIONARY, ChordDefinition, CHROMATIC_NOTES, getNoteAtFret, NOTE_COLORS } from "../types";
+import { getChordDictionary, ChordDefinition, CHROMATIC_NOTES, getNoteAtFret, NOTE_COLORS, InstrumentType } from "../types";
 import { synth } from "../audio";
-import { Play, Search, HelpCircle, RefreshCw } from "lucide-react";
+import { Play, Search, RefreshCw } from "lucide-react";
 import { TRANSLATIONS } from "../translations";
 
 interface ChordsProps {
@@ -16,6 +16,7 @@ interface ChordsProps {
   selectedChordName?: string;
   leftHanded: boolean;
   language?: "hr" | "en";
+  instrument?: InstrumentType;
 }
 
 export const Chords: React.FC<ChordsProps> = ({
@@ -23,17 +24,32 @@ export const Chords: React.FC<ChordsProps> = ({
   onSelectChord,
   selectedChordName,
   leftHanded,
-  language = "hr"
+  language = "hr",
+  instrument = "mandolin" as InstrumentType
 }) => {
   const t = TRANSLATIONS[language];
+  const isGuitar = instrument === "guitar";
+  const chordDictionary = getChordDictionary(instrument as InstrumentType);
+
+  // String tuning definitions
+  const stringsInOrder = isGuitar
+    ? ["E2", "A2", "D3", "G3", "B3", "E4"]
+    : ["G3", "D4", "A4", "E5"];
   
   // We support two sub-modes inside the Chords tab:
   // 1. "library" - Select standard chords in the current key
   // 2. "reverse" - Reverse Chord Finder (click frets to identify chord)
   const [subTab, setSubTab] = React.useState<"library" | "reverse">("library");
   
-  // Reverse Finder State: [G, D, A, E] frets. -1 = Muted, 0 = Open, 1-7 = Fretted
-  const [reverseFrets, setReverseFrets] = React.useState<number[]>([0, 0, 2, 3]); // G Major default
+  // Reverse Finder State: [strings] frets. -1 = Muted, 0 = Open, 1-7 = Fretted
+  const [reverseFrets, setReverseFrets] = React.useState<number[]>(
+    isGuitar ? [3, 2, 0, 0, 0, 3] : [0, 0, 2, 3]
+  );
+
+  // Update reverseFrets when instrument changes
+  React.useEffect(() => {
+    setReverseFrets(isGuitar ? [3, 2, 0, 0, 0, 3] : [0, 0, 2, 3]);
+  }, [isGuitar]);
 
   // Auto-sync reverse frets to main fretboard in real-time when in reverse finder tab
   React.useEffect(() => {
@@ -45,13 +61,13 @@ export const Chords: React.FC<ChordsProps> = ({
   // Restore the selected library chord on the main fretboard when returning to library tab
   React.useEffect(() => {
     if (subTab === "library") {
-      const keyChords = CHORD_DICTIONARY[rootNote] || {};
+      const keyChords = chordDictionary[rootNote] || {};
       const firstChord = Object.values(keyChords).flat()[0];
       if (firstChord) {
         onSelectChord(firstChord.frets);
       }
     }
-  }, [subTab, rootNote, onSelectChord]);
+  }, [subTab, rootNote, chordDictionary, onSelectChord]);
 
   // Calculate logarithmic fret ratios for realistic layout in Reverse Finder
   const fretPercentages = React.useMemo(() => {
@@ -67,32 +83,28 @@ export const Chords: React.FC<ChordsProps> = ({
 
   // Fetch chord list for active rootNote
   const availableChords = React.useMemo(() => {
-    const keyChords = CHORD_DICTIONARY[rootNote] || {};
+    const keyChords = chordDictionary[rootNote] || {};
     return Object.values(keyChords).flat();
-  }, [rootNote]);
+  }, [rootNote, chordDictionary]);
 
   // Handle playing a chord definition
   const handlePlayChord = (chord: ChordDefinition) => {
-    // Strum chord with slight delay per string for realistic texture
-    const stringsInOrder = ["G3", "D4", "A4", "E5"];
-    
     chord.frets.forEach((fret, idx) => {
-      if (fret !== -1) {
+      if (fret !== -1 && idx < stringsInOrder.length) {
         const noteInfo = getNoteAtFret(stringsInOrder[idx], fret);
         setTimeout(() => {
-          synth.playNote(noteInfo.name, noteInfo.octave, 1.2);
-        }, idx * 45); // strumming speed
+          synth.playNote(noteInfo.name, noteInfo.octave, 1.2, instrument as InstrumentType);
+        }, idx * (isGuitar ? 35 : 45)); // strumming speed
       }
     });
   };
 
-  // Chord Auto-Recognition (Simple Heuristic for Mandolin 4-course)
+  // Chord Auto-Recognition (Heuristic for Mandolin or Guitar)
   const detectedChord = React.useMemo(() => {
     const activeNotesSet = new Set<string>();
-    const stringsInOrder = ["G3", "D4", "A4", "E5"];
     
     reverseFrets.forEach((f, idx) => {
-      if (f !== -1) {
+      if (f !== -1 && idx < stringsInOrder.length) {
         const noteInfo = getNoteAtFret(stringsInOrder[idx], f);
         activeNotesSet.add(noteInfo.name);
       }
@@ -104,12 +116,13 @@ export const Chords: React.FC<ChordsProps> = ({
     }
 
     // Try to match the active notes and frets with our dictionary
-    for (const key of Object.keys(CHORD_DICTIONARY)) {
-      const keyChords = CHORD_DICTIONARY[key];
+    for (const key of Object.keys(chordDictionary)) {
+      const keyChords = chordDictionary[key];
       for (const catChords of Object.values(keyChords)) {
         for (const chord of catChords) {
           // Check if frets match exactly
-          const fretMatch = chord.frets.every((f, idx) => f === reverseFrets[idx]);
+          const fretMatch = chord.frets.length === reverseFrets.length &&
+            chord.frets.every((f, idx) => f === reverseFrets[idx]);
           if (fretMatch) {
             return { name: chord.name, notes: chord.notes };
           }
@@ -163,37 +176,17 @@ export const Chords: React.FC<ChordsProps> = ({
       name: `${notesArray[0]} ${notesArray.length > 2 ? (language === "en" ? "Chord" : "Akord") : "Interval"}`, 
       notes: notesArray 
     };
-  }, [reverseFrets, language]);
+  }, [reverseFrets, language, chordDictionary, stringsInOrder]);
 
   // Handle strumming reverse-finder chord
   const handlePlayReverseChord = () => {
-    const stringsInOrder = ["G3", "D4", "A4", "E5"];
     reverseFrets.forEach((f, idx) => {
-      if (f !== -1) {
+      if (f !== -1 && idx < stringsInOrder.length) {
         const noteInfo = getNoteAtFret(stringsInOrder[idx], f);
         setTimeout(() => {
-          synth.playNote(noteInfo.name, noteInfo.octave, 1.2);
-        }, idx * 45);
+          synth.playNote(noteInfo.name, noteInfo.octave, 1.2, instrument as InstrumentType);
+        }, idx * (isGuitar ? 35 : 45));
       }
-    });
-  };
-
-  // Adjust string fret in Reverse Finder
-  const adjustFret = (stringIdx: number, dir: number) => {
-    setReverseFrets(prev => {
-      const next = [...prev];
-      let val = next[stringIdx];
-      
-      if (val === -1 && dir === 1) {
-        val = 0; // unmute to open
-      } else {
-        val += dir;
-        if (val < -1) val = -1; // -1 is muted (X)
-        if (val > 7) val = 7; // limit to 7 frets
-      }
-      
-      next[stringIdx] = val;
-      return next;
     });
   };
 
@@ -321,7 +314,7 @@ export const Chords: React.FC<ChordsProps> = ({
               {language === "en" ? "CHORD DETECTOR" : "DETEKTOR AKORDA"}
             </span>
             <button
-              onClick={() => setReverseFrets([0, 0, 2, 3])}
+              onClick={() => setReverseFrets(isGuitar ? [3, 2, 0, 0, 0, 3] : [0, 0, 2, 3])}
               className="text-[10px] text-white/40 hover:text-white flex items-center gap-1 font-mono cursor-pointer"
               id="reset-reverse-finder"
             >
@@ -329,12 +322,13 @@ export const Chords: React.FC<ChordsProps> = ({
             </button>
           </div>
 
-          {/* Slikovni interaktivni vrat mandoline */}
+          {/* Slikovni interaktivni vrat instrumenta */}
           {(() => {
             const FRET_COUNT = 7;
             const fretsArray = Array.from({ length: FRET_COUNT }, (_, i) => i + 1); // [1, 2, 3, 4, 5, 6, 7]
-            const displayIndices = leftHanded ? [3, 2, 1, 0] : [0, 1, 2, 3];
-            const stringsInOrder = ["G3", "D4", "A4", "E5"];
+            const stringCount = stringsInOrder.length;
+            const normalIndices = Array.from({ length: stringCount }, (_, i) => i);
+            const displayIndices = leftHanded ? [...normalIndices].reverse() : normalIndices;
 
             return (
               <div className="bg-[#121214] p-4 rounded-xl border border-white/5 flex flex-col items-center">
@@ -371,8 +365,8 @@ export const Chords: React.FC<ChordsProps> = ({
                     </div>
                   </div>
 
-                  {/* Fretboard main container (constrained narrow neck like Fretboard.tsx) */}
-                  <div className="relative w-[190px] h-full flex flex-col" style={{ height: "335px" }}>
+                  {/* Fretboard main container */}
+                  <div className={`relative ${isGuitar ? "w-[230px] sm:w-[245px]" : "w-[190px]"} h-full flex flex-col transition-all duration-200`} style={{ height: "335px" }}>
                     
                     {/* String controls on top representing Open / Mute status */}
                     <div className="flex justify-around w-full h-10 items-center border-b border-white/10 select-none pb-1 px-1">
@@ -393,7 +387,7 @@ export const Chords: React.FC<ChordsProps> = ({
                                 return updated;
                               });
                             }}
-                            className={`w-7.5 h-7.5 rounded-lg flex flex-col items-center justify-center transition active:scale-95 cursor-pointer relative z-40 border ${
+                            className={`${isGuitar ? "w-6.5 h-6.5" : "w-7.5 h-7.5"} rounded-lg flex flex-col items-center justify-center transition active:scale-95 cursor-pointer relative z-40 border ${
                               isOpen
                                 ? "bg-[#F27D26]/20 border-[#F27D26] text-[#F27D26] shadow-[0_0_8px_rgba(242,125,38,0.25)]"
                                 : isFretted
@@ -485,50 +479,93 @@ export const Chords: React.FC<ChordsProps> = ({
                         );
                       })}
 
-                      {/* Double Strings (4 courses with realistic dimensions & silvery steel gradients) */}
+                      {/* Strings: 4 courses for Mandolin, 6 single strings with wound bronze/steel for Guitar */}
                       <div className="absolute inset-0 flex justify-around px-1 pointer-events-none z-20">
                         {displayIndices.map((stringIdx) => {
-                          let stringStyle: React.CSSProperties = {};
-                          let stringWidth = "w-[1px]";
-                          
-                          if (stringIdx === 0) {
-                            // G: Thickest silver steel course
-                            stringWidth = "w-[2.4px]";
-                            stringStyle = {
-                              background: "linear-gradient(90deg, #374151 0%, #9ca3af 20%, #f8fafc 45%, #e2e8f0 60%, #9ca3af 75%, #374151 100%)",
-                              boxShadow: "0.5px 0 2.5px rgba(0,0,0,0.9)"
-                            };
-                          } else if (stringIdx === 1) {
-                            // D: Medium silver steel course
-                            stringWidth = "w-[1.8px]";
-                            stringStyle = {
-                              background: "linear-gradient(90deg, #4b5563 0%, #cbd5e1 25%, #f8fafc 50%, #cbd5e1 75%, #4b5563 100%)",
-                              boxShadow: "0.5px 0 2px rgba(0,0,0,0.85)"
-                            };
-                          } else if (stringIdx === 2) {
-                            // A: Thin silver steel course
-                            stringWidth = "w-[1.1px]";
-                            stringStyle = {
-                              background: "linear-gradient(90deg, #64748b 0%, #e2e8f0 35%, #ffffff 50%, #cbd5e1 65%, #475569 100%)",
-                              boxShadow: "0.5px 0 1.5px rgba(0,0,0,0.8)"
-                            };
-                          } else {
-                            // E: Thinnest silver steel course
-                            stringWidth = "w-[0.8px]";
-                            stringStyle = {
-                              background: "linear-gradient(90deg, #94a3b8 0%, #f1f5f9 50%, #475569 100%)",
-                              boxShadow: "0.5px 0 1px rgba(0,0,0,0.75)"
-                            };
-                          }
+                          if (isGuitar) {
+                            let stringWidth = "w-[1px]";
+                            let stringStyle: React.CSSProperties = {};
 
-                          return (
-                            <div key={`course-reverse-${stringIdx}`} className="h-full flex gap-[2.4px] justify-center items-center opacity-95">
-                              {/* Double string 1 */}
-                              <div className={`h-full ${stringWidth}`} style={stringStyle} />
-                              {/* Double string 2 */}
-                              <div className={`h-full ${stringWidth}`} style={stringStyle} />
-                            </div>
-                          );
+                            if (stringIdx === 0) {
+                              stringWidth = "w-[2.8px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #78350f 0%, #b45309 25%, #fde68a 50%, #b45309 75%, #451a03 100%)",
+                                boxShadow: "0.5px 0 2.5px rgba(0,0,0,0.95)"
+                              };
+                            } else if (stringIdx === 1) {
+                              stringWidth = "w-[2.2px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #78350f 0%, #d97706 25%, #fef3c7 50%, #b45309 75%, #451a03 100%)",
+                                boxShadow: "0.5px 0 2px rgba(0,0,0,0.9)"
+                              };
+                            } else if (stringIdx === 2) {
+                              stringWidth = "w-[1.7px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #92400e 0%, #cbd5e1 30%, #fef08a 50%, #94a3b8 70%, #451a03 100%)",
+                                boxShadow: "0.5px 0 1.8px rgba(0,0,0,0.85)"
+                              };
+                            } else if (stringIdx === 3) {
+                              stringWidth = "w-[1.2px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #475569 0%, #e2e8f0 35%, #ffffff 50%, #cbd5e1 65%, #334155 100%)",
+                                boxShadow: "0.5px 0 1.5px rgba(0,0,0,0.8)"
+                              };
+                            } else if (stringIdx === 4) {
+                              stringWidth = "w-[0.9px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #64748b 0%, #f8fafc 50%, #475569 100%)",
+                                boxShadow: "0.5px 0 1.2px rgba(0,0,0,0.75)"
+                              };
+                            } else {
+                              stringWidth = "w-[0.7px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #94a3b8 0%, #ffffff 50%, #475569 100%)",
+                                boxShadow: "0.5px 0 1px rgba(0,0,0,0.7)"
+                              };
+                            }
+
+                            return (
+                              <div key={`guitar-reverse-str-${stringIdx}`} className="h-full flex justify-center items-center opacity-95">
+                                <div className={`h-full ${stringWidth}`} style={stringStyle} />
+                              </div>
+                            );
+                          } else {
+                            let stringStyle: React.CSSProperties = {};
+                            let stringWidth = "w-[1px]";
+                            
+                            if (stringIdx === 0) {
+                              stringWidth = "w-[2.4px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #374151 0%, #9ca3af 20%, #f8fafc 45%, #e2e8f0 60%, #9ca3af 75%, #374151 100%)",
+                                boxShadow: "0.5px 0 2.5px rgba(0,0,0,0.9)"
+                              };
+                            } else if (stringIdx === 1) {
+                              stringWidth = "w-[1.8px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #4b5563 0%, #cbd5e1 25%, #f8fafc 50%, #cbd5e1 75%, #4b5563 100%)",
+                                boxShadow: "0.5px 0 2px rgba(0,0,0,0.85)"
+                              };
+                            } else if (stringIdx === 2) {
+                              stringWidth = "w-[1.1px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #64748b 0%, #e2e8f0 35%, #ffffff 50%, #cbd5e1 65%, #475569 100%)",
+                                boxShadow: "0.5px 0 1.5px rgba(0,0,0,0.8)"
+                              };
+                            } else {
+                              stringWidth = "w-[0.8px]";
+                              stringStyle = {
+                                background: "linear-gradient(90deg, #94a3b8 0%, #f1f5f9 50%, #475569 100%)",
+                                boxShadow: "0.5px 0 1px rgba(0,0,0,0.75)"
+                              };
+                            }
+
+                            return (
+                              <div key={`course-reverse-${stringIdx}`} className="h-full flex gap-[2.4px] justify-center items-center opacity-95">
+                                <div className={`h-full ${stringWidth}`} style={stringStyle} />
+                                <div className={`h-full ${stringWidth}`} style={stringStyle} />
+                              </div>
+                            );
+                          }
                         })}
                       </div>
 
@@ -537,7 +574,7 @@ export const Chords: React.FC<ChordsProps> = ({
                         {displayIndices.map((stringIdx) => {
                           const stringBase = stringsInOrder[stringIdx];
                           return (
-                            <div key={`notes-course-reverse-${stringIdx}`} className="h-full flex flex-col justify-between relative" style={{ width: "24px" }}>
+                            <div key={`notes-course-reverse-${stringIdx}`} className="h-full flex flex-col justify-between relative" style={{ width: isGuitar ? "22px" : "24px" }}>
                               {fretsArray.map((fretNum) => {
                                 const isActive = reverseFrets[stringIdx] === fretNum;
                                 const noteInfo = getNoteAtFret(stringBase, fretNum);
@@ -580,7 +617,7 @@ export const Chords: React.FC<ChordsProps> = ({
                                         layoutId={`reverse-marker-${stringIdx}`}
                                         initial={{ scale: 0.5, opacity: 0 }}
                                         animate={{ scale: 1, opacity: 1 }}
-                                        className="relative w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 rounded-full flex items-center justify-center text-xs font-black shadow-lg transition-all duration-150 z-40"
+                                        className={`relative ${isGuitar ? "w-6.5 h-6.5 sm:w-7 sm:h-7 text-[10.5px]" : "w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 text-xs"} rounded-full flex items-center justify-center font-black shadow-lg transition-all duration-150 z-40`}
                                         style={{ 
                                           backgroundColor: isRoot ? "#F27D26" : (NOTE_COLORS[noteInfo.name] || "rgba(255, 255, 255, 0.1)"),
                                           boxShadow: isRoot 
@@ -670,13 +707,12 @@ export const Chords: React.FC<ChordsProps> = ({
             </div>
 
             {/* Detailed String Breakdown */}
-            <div className="grid grid-cols-4 gap-1 text-center bg-black/40 p-2 rounded-lg text-[9px] font-mono text-white/40">
+            <div className={`grid ${isGuitar ? "grid-cols-6" : "grid-cols-4"} gap-1 text-center bg-black/40 p-2 rounded-lg text-[9px] font-mono text-white/40`}>
               {reverseFrets.map((f, idx) => {
-                const baseStringNotes = ["G3", "D4", "A4", "E5"];
-                const noteInfo = f !== -1 ? getNoteAtFret(baseStringNotes[idx], f) : null;
+                const noteInfo = f !== -1 && idx < stringsInOrder.length ? getNoteAtFret(stringsInOrder[idx], f) : null;
                 return (
                   <div key={idx} className="flex flex-col gap-0.5 border-r border-white/5 last:border-none">
-                    <span>{language === "en" ? "Str" : "Žica"} {4 - idx}</span>
+                    <span>{language === "en" ? "Str" : "Žica"} {stringsInOrder.length - idx}</span>
                     <span className={`font-bold ${f === -1 ? "text-white/20" : "text-white/80"}`}>
                       {f === -1 ? "x" : `${noteInfo?.name}${noteInfo?.octave}`}
                     </span>

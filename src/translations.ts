@@ -7,7 +7,7 @@ export const TRANSLATIONS = {
   hr: {
     // Header & Layout
     "title": "Mandolina",
-    "pwa_helper": "PWA POMOĆNIK ZA MANDOLINU",
+    "pwa_helper": "PWA POMOĆNIK ZA MANDOLINU & GITARU",
     "settings": "Postavke aplikacije",
     "user": "Korisnik",
     "tab_scales": "Ljestvice",
@@ -15,6 +15,10 @@ export const TRANSLATIONS = {
     "tab_doublestops": "Dvozvuci",
     "tab_tremolo": "Tremolo",
     "tab_circle": "Krug",
+    "instrument": "Instrument",
+    "mandolin": "Mandolina",
+    "guitar": "Gitara (talijanski štim)",
+    "guitar_short": "Gitara",
     
     // Selectors & visibility
     "root_key": "Tonalitet (Root)",
@@ -28,16 +32,20 @@ export const TRANSLATIONS = {
     "play_all": "Odsviraj",
     "play_all_title": "Odsviraj sve aktivne tonove odjednom",
     "play_open": "Odsviraj praznu žicu",
-    "fretboard_title": "VRAT MANDOLINE",
+    "fretboard_title": "VRAT INSTRUMENTA",
+    "fretboard_title_mandolin": "VRAT MANDOLINE",
+    "fretboard_title_guitar": "VRAT GITARE",
     "fretboard_chords_title": "AKORD VIZUALIZATOR",
     "fretboard_double_title": "DVOZVUK",
 
     // Settings Modal
     "settings_title": "POSTAVKE ALATA",
     "left_handed": "Za ljevake (Left-Handed)",
-    "left_handed_desc": "Obrni žice na vratu mandoline",
+    "left_handed_desc": "Obrni žice na vratu instrumenta",
     "volume": "Glasnoća zvuka",
-    "tuning": "Štimanje mandoline",
+    "tuning": "Štimanje instrumenta",
+    "tuning_mandolin": "Štimanje mandoline",
+    "tuning_guitar": "Štimanje gitare",
     "pwa_offline": "PWA Offline podrška aktivna:",
     "pwa_offline_desc": "Aplikacija u potpunosti radi offline koristeći Web Audio sintetizator.",
     "save_close": "Spremi i zatvori",
@@ -56,19 +64,23 @@ export const TRANSLATIONS = {
     "circle_guide_note": "* Klikni bilo koji vanjski ton za brzu transpoziciju cijele aplikacije u taj Dur, ili unutarnji ton za Mol.",
 
     // Chords Component
-    "chords_list_title": "AKORDI ZA MANDOLINU",
-    "chords_list_desc": "Odaberi akord za prikaz na vratu mandoline",
+    "chords_list_title": "AKORDI",
+    "chords_list_title_mandolin": "AKORDI ZA MANDOLINU",
+    "chords_list_title_guitar": "AKORDI ZA GITARU",
+    "chords_list_desc": "Odaberi akord za prikaz na vratu instrumenta",
     "chords_search_placeholder": "Traži akord...",
     "chords_play_progression": "Odsviraj progresiju",
     "chords_chord_builder_title": "IZGRADNJA AKORDA",
-    "chords_chord_builder_desc": "Tapkanjem po pragovima na vratu gornje mandoline kreiraš i prepoznaješ akorde u realnom vremenu!",
+    "chords_chord_builder_desc": "Tapkanjem po pragovima na vratu kreiraš i prepoznaješ akorde u realnom vremenu!",
     "chords_recognized": "Prepoznati Akord",
     "chords_active_notes": "Aktivni tonovi:",
     "chords_muted_all": "Sve žice prigušene",
     "chords_unnamed": "Nepoznati akord",
 
     // Double Stops Component
-    "ds_title": "DVOZVUCI ZA MANDOLINU",
+    "ds_title": "DVOZVUCI",
+    "ds_title_mandolin": "DVOZVUCI ZA MANDOLINU",
+    "ds_title_guitar": "DVOZVUCI ZA GITARU",
     "ds_desc": "2-notne harmonije (dvozvuci) u tonalitetu",
     "ds_how_title": "💡 Što su dvozvuci (Double Stops)?",
     "ds_how_text": "Dvozvuci su tehnika sviranja dvije žice istovremeno. Izuzetno su popularni u bluegrass i tradicionalnoj glazbi na mandolini jer daju bogat, harmoniziran zvuk.",
@@ -97,7 +109,7 @@ export const TRANSLATIONS = {
   en: {
     // Header & Layout
     "title": "Mandolin",
-    "pwa_helper": "PWA MANDOLIN HELPER",
+    "pwa_helper": "PWA MANDOLIN & GUITAR HELPER",
     "settings": "App Settings",
     "user": "User",
     "tab_scales": "Scales",
@@ -105,6 +117,10 @@ export const TRANSLATIONS = {
     "tab_doublestops": "Double Stops",
     "tab_tremolo": "Tremolo",
     "tab_circle": "Circle",
+    "instrument": "Instrument",
+    "mandolin": "Mandolin",
+    "guitar": "Guitar (Italian/Standard)",
+    "guitar_short": "Guitar",
     
     // Selectors & visibility
     "root_key": "Key (Root)",
@@ -118,7 +134,9 @@ export const TRANSLATIONS = {
     "play_all": "Play All",
     "play_all_title": "Strum all active notes at once",
     "play_open": "Play open string",
-    "fretboard_title": "MANDOLIN FRETBOARD",
+    "fretboard_title": "FRETBOARD",
+    "fretboard_title_mandolin": "MANDOLIN FRETBOARD",
+    "fretboard_title_guitar": "GUITAR FRETBOARD",
     "fretboard_chords_title": "CHORD VISUALIZER",
     "fretboard_double_title": "DOUBLE STOP",
 
@@ -127,7 +145,9 @@ export const TRANSLATIONS = {
     "left_handed": "Left-Handed Mode",
     "left_handed_desc": "Reverse strings on the fretboard",
     "volume": "Master Volume",
-    "tuning": "Mandolin Tuning",
+    "tuning": "Instrument Tuning",
+    "tuning_mandolin": "Mandolin Tuning",
+    "tuning_guitar": "Guitar Tuning",
     "pwa_offline": "PWA Offline support active:",
     "pwa_offline_desc": "The app runs fully offline using Web Audio synthesizer.",
     "save_close": "Save & Close",
@@ -146,7 +166,9 @@ export const TRANSLATIONS = {
     "circle_guide_note": "* Click any outer key for quick transposition of the entire app to that Major, or inner key for Minor.",
 
     // Chords Component
-    "chords_list_title": "MANDOLIN CHORDS",
+    "chords_list_title": "CHORDS",
+    "chords_list_title_mandolin": "MANDOLIN CHORDS",
+    "chords_list_title_guitar": "GUITAR CHORDS",
     "chords_list_desc": "Select a chord to visualize on the fretboard",
     "chords_search_placeholder": "Search chord...",
     "chords_play_progression": "Play progression",
@@ -158,7 +180,9 @@ export const TRANSLATIONS = {
     "chords_unnamed": "Unnamed chord",
 
     // Double Stops Component
-    "ds_title": "MANDOLIN DOUBLE STOPS",
+    "ds_title": "DOUBLE STOPS",
+    "ds_title_mandolin": "MANDOLIN DOUBLE STOPS",
+    "ds_title_guitar": "GUITAR DOUBLE STOPS",
     "ds_desc": "2-note harmonies (double stops) in key",
     "ds_how_title": "💡 What are double stops?",
     "ds_how_text": "Double stops are a technique of playing two strings at the same time. They are extremely popular in bluegrass and traditional mandolin music, offering a rich, harmonized sound.",

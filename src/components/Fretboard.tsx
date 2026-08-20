@@ -123,7 +123,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
 
     const activeNotesList: { stringIndex: number; fret: number; name: string; octave: number }[] = [];
 
-    // Collect all active/visible notes on the fretboard from lowest course (G) to highest (E)
+    // Collect all active/visible notes on the fretboard from lowest string to highest
     tuning.notes.forEach((stringBase, sIdx) => {
       // Search from fret 0 (open) to 7
       for (let f = 0; f <= fretCount; f++) {
@@ -149,12 +149,13 @@ export const Fretboard: React.FC<FretboardProps> = ({
     }
 
     let delay = 0;
-    const intervalMs = 280; // Slow, melodic timing (approx 3-4 notes per second)
+    const isGuitar = tuning.instrument === "guitar" || tuning.notes.length === 6;
+    const intervalMs = isGuitar ? 230 : 280;
 
-    sequence.forEach((note, idx) => {
+    sequence.forEach((note) => {
       const tId = window.setTimeout(() => {
         // Play the pitch
-        synth.playNote(note.name, note.octave, 0.4);
+        synth.playNote(note.name, note.octave, 0.45, isGuitar ? "guitar" : "mandolin");
         // Highlight this exact note badge on the fretboard
         setActivePlayingNode({ stringIndex: note.stringIndex, fret: note.fret });
       }, delay);
@@ -169,6 +170,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
     playbackTimeoutsRef.current.push(clearId);
   };
 
+  const isGuitar = tuning.instrument === "guitar" || tuning.notes.length === 6;
   // Reverse string order if lefty handed
   const stringsInOrder = leftHanded ? [...tuning.notes].reverse() : tuning.notes;
 
@@ -176,7 +178,10 @@ export const Fretboard: React.FC<FretboardProps> = ({
     <div className="flex flex-col items-center w-full max-w-sm mx-auto bg-[#0a0a0a] rounded-xl p-2.5 border border-white/10 shadow-xl">
       
       {/* Top Header Controls for Fretboard */}
-      <div className="flex justify-end items-center w-full mb-1.5 px-1">
+      <div className="flex justify-between items-center w-full mb-1.5 px-1">
+        <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">
+          {isGuitar ? (t["fretboard_title_guitar"] || "Vrat Gitare") : (t["fretboard_title_mandolin"] || "Vrat Mandoline")}
+        </span>
         <button
           onClick={playAllActiveNotes}
           className="flex items-center gap-1 px-3 py-0.5 bg-[#F27D26] hover:bg-[#F27D26]/90 text-white text-[11px] font-semibold rounded-full transition shadow-md shadow-orange-950/20 active:scale-95 cursor-pointer"
@@ -208,18 +213,18 @@ export const Fretboard: React.FC<FretboardProps> = ({
           })}
         </div>
 
-        {/* Fretboard main container (constrained narrow neck) */}
-        <div className="relative w-[190px] h-full flex flex-col">
+        {/* Fretboard main container */}
+        <div className={`relative ${isGuitar ? "w-[230px] sm:w-[245px]" : "w-[190px]"} h-full flex flex-col transition-all duration-200`}>
           
           {/* String labels on top (representing open strings / fret 0) */}
           <div className="flex justify-around w-full h-10 items-center border-b border-white/10 select-none pb-1 px-1">
             {stringsInOrder.map((stringBase, idx) => {
               const noteInfo = getNoteAtFret(stringBase, 0);
-              const originalIdx = tuning.notes.indexOf(stringBase);
+              const originalIdx = leftHanded ? tuning.notes.length - 1 - idx : idx;
               const isVisible = shouldShowNote(originalIdx, 0, noteInfo.name);
               const isRoot = noteInfo.name === rootNote;
               const isPlaying = activePlayingNode?.stringIndex === originalIdx && activePlayingNode?.fret === 0;
-              
+
               return (
                 <button
                   key={idx}
@@ -229,12 +234,12 @@ export const Fretboard: React.FC<FretboardProps> = ({
                   id={`open-string-${idx}`}
                 >
                   {isRoot ? (
-                    <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center text-[10.5px] font-extrabold text-white bg-[#F27D26] shadow-[0_0_12px_rgba(242,125,38,0.85)] border border-orange-300/40 relative transition-all duration-150 ${isPlaying ? "scale-115 ring-2 ring-white shadow-[0_0_20px_#F27D26]" : ""}`}>
+                    <div className={`${isGuitar ? "w-6.5 h-6.5 text-[9.5px]" : "w-7.5 h-7.5 text-[10.5px]"} rounded-lg flex items-center justify-center font-extrabold text-white bg-[#F27D26] shadow-[0_0_12px_rgba(242,125,38,0.85)] border border-orange-300/40 relative transition-all duration-150 ${isPlaying ? "scale-115 ring-2 ring-white shadow-[0_0_20px_#F27D26]" : ""}`}>
                       {noteInfo.name}
                     </div>
                   ) : isVisible ? (
                     <div 
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10.5px] font-bold text-white border border-white/20 transition-all duration-150 ${isPlaying ? "scale-115 ring-2 ring-white" : ""}`}
+                      className={`${isGuitar ? "w-6 h-6 text-[9.5px]" : "w-7 h-7 text-[10.5px]"} rounded-lg flex items-center justify-center font-bold text-white border border-white/20 transition-all duration-150 ${isPlaying ? "scale-115 ring-2 ring-white" : ""}`}
                       style={{ 
                         backgroundColor: NOTE_COLORS[noteInfo.name] || "rgba(255, 255, 255, 0.1)",
                         boxShadow: isPlaying 
@@ -245,12 +250,12 @@ export const Fretboard: React.FC<FretboardProps> = ({
                       {noteInfo.name}
                     </div>
                   ) : (
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-medium text-white/40 bg-black/40 border border-white/5 group-hover:border-white/20 group-hover:text-white/70 transition">
+                    <div className={`${isGuitar ? "w-6 h-6 text-[9px]" : "w-7 h-7 text-[10px]"} rounded-lg flex items-center justify-center font-medium text-white/40 bg-black/40 border border-white/5 group-hover:border-white/20 group-hover:text-white/70 transition`}>
                       {noteInfo.name}
                     </div>
                   )}
-                  {/* Subtle speaker icon or indicator */}
-                  <Volume2 size={7} className="text-white/25 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  {/* String tuning tag */}
+                  <span className="text-[8px] font-mono text-white/30 mt-0.5">{stringBase}</span>
                 </button>
               );
             })}
@@ -323,63 +328,113 @@ export const Fretboard: React.FC<FretboardProps> = ({
               );
             })}
 
-            {/* Strings (4 courses of double strings with realistic dimensions & silvery steel gradients) */}
+            {/* Strings Layer: 4 courses for Mandolin, 6 single strings with wound bronze/steel gauges for Guitar */}
             <div className="absolute inset-0 flex justify-around px-1 pointer-events-none">
               {stringsInOrder.map((stringBase, sIdx) => {
-                const originalIdx = tuning.notes.indexOf(stringBase);
+                const originalIdx = leftHanded ? tuning.notes.length - 1 - sIdx : sIdx;
                 
-                // Real silver steel modeling based on pitch:
-                // All strings have elegant metallic silver sheen gradients to prevent screen aliasing "dots"
-                let stringStyle: React.CSSProperties = {};
-                let stringWidth = "w-[1px]";
-                
-                if (originalIdx === 0) {
-                  // G: Thickest silver steel course
-                  stringWidth = "w-[2.4px]";
-                  stringStyle = {
-                    background: "linear-gradient(90deg, #374151 0%, #9ca3af 20%, #f8fafc 45%, #e2e8f0 60%, #9ca3af 75%, #374151 100%)",
-                    boxShadow: "0.5px 0 2.5px rgba(0,0,0,0.9)"
-                  };
-                } else if (originalIdx === 1) {
-                  // D: Medium silver steel course
-                  stringWidth = "w-[1.8px]";
-                  stringStyle = {
-                    background: "linear-gradient(90deg, #4b5563 0%, #cbd5e1 25%, #f8fafc 50%, #cbd5e1 75%, #4b5563 100%)",
-                    boxShadow: "0.5px 0 2px rgba(0,0,0,0.85)"
-                  };
-                } else if (originalIdx === 2) {
-                  // A: Thin silver steel course
-                  stringWidth = "w-[1.1px]";
-                  stringStyle = {
-                    background: "linear-gradient(90deg, #64748b 0%, #e2e8f0 35%, #ffffff 50%, #cbd5e1 65%, #475569 100%)",
-                    boxShadow: "0.5px 0 1.5px rgba(0,0,0,0.8)"
-                  };
-                } else {
-                  // E: Thinnest silver steel course
-                  stringWidth = "w-[0.8px]";
-                  stringStyle = {
-                    background: "linear-gradient(90deg, #94a3b8 0%, #f1f5f9 50%, #475569 100%)",
-                    boxShadow: "0.5px 0 1px rgba(0,0,0,0.75)"
-                  };
-                }
+                if (isGuitar) {
+                  // GUITAR: 6 single strings with realistic wound bronze and silver steel gauges
+                  let stringWidth = "w-[1px]";
+                  let stringStyle: React.CSSProperties = {};
 
-                return (
-                  <div key={`course-${sIdx}`} className="h-full flex gap-[2.4px] justify-center items-center opacity-95 z-20">
-                    {/* Double string 1 */}
-                    <div className={`h-full ${stringWidth}`} style={stringStyle} />
-                    {/* Double string 2 */}
-                    <div className={`h-full ${stringWidth}`} style={stringStyle} />
-                  </div>
-                );
+                  if (originalIdx === 0) {
+                    // Low E (E2): Thick bronze wound
+                    stringWidth = "w-[2.8px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #78350f 0%, #b45309 25%, #fde68a 50%, #b45309 75%, #451a03 100%)",
+                      boxShadow: "0.5px 0 2.5px rgba(0,0,0,0.95)"
+                    };
+                  } else if (originalIdx === 1) {
+                    // A (A2): Medium bronze wound
+                    stringWidth = "w-[2.2px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #78350f 0%, #d97706 25%, #fef3c7 50%, #b45309 75%, #451a03 100%)",
+                      boxShadow: "0.5px 0 2px rgba(0,0,0,0.9)"
+                    };
+                  } else if (originalIdx === 2) {
+                    // D (D3): Light bronze/nickel wound
+                    stringWidth = "w-[1.7px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #92400e 0%, #cbd5e1 30%, #fef08a 50%, #94a3b8 70%, #451a03 100%)",
+                      boxShadow: "0.5px 0 1.8px rgba(0,0,0,0.85)"
+                    };
+                  } else if (originalIdx === 3) {
+                    // G (G3): Steel / light wound
+                    stringWidth = "w-[1.2px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #475569 0%, #e2e8f0 35%, #ffffff 50%, #cbd5e1 65%, #334155 100%)",
+                      boxShadow: "0.5px 0 1.5px rgba(0,0,0,0.8)"
+                    };
+                  } else if (originalIdx === 4) {
+                    // B (B3): Plain silver steel
+                    stringWidth = "w-[0.9px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #64748b 0%, #f8fafc 50%, #475569 100%)",
+                      boxShadow: "0.5px 0 1.2px rgba(0,0,0,0.75)"
+                    };
+                  } else {
+                    // High E (E4): Thinnest plain steel
+                    stringWidth = "w-[0.7px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #94a3b8 0%, #ffffff 50%, #475569 100%)",
+                      boxShadow: "0.5px 0 1px rgba(0,0,0,0.7)"
+                    };
+                  }
+
+                  return (
+                    <div key={`guitar-str-${sIdx}`} className="h-full flex justify-center items-center opacity-95 z-20">
+                      <div className={`h-full ${stringWidth}`} style={stringStyle} />
+                    </div>
+                  );
+
+                } else {
+                  // MANDOLIN: 4 courses of double strings
+                  let stringStyle: React.CSSProperties = {};
+                  let stringWidth = "w-[1px]";
+                  
+                  if (originalIdx === 0) {
+                    stringWidth = "w-[2.4px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #374151 0%, #9ca3af 20%, #f8fafc 45%, #e2e8f0 60%, #9ca3af 75%, #374151 100%)",
+                      boxShadow: "0.5px 0 2.5px rgba(0,0,0,0.9)"
+                    };
+                  } else if (originalIdx === 1) {
+                    stringWidth = "w-[1.8px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #4b5563 0%, #cbd5e1 25%, #f8fafc 50%, #cbd5e1 75%, #4b5563 100%)",
+                      boxShadow: "0.5px 0 2px rgba(0,0,0,0.85)"
+                    };
+                  } else if (originalIdx === 2) {
+                    stringWidth = "w-[1.1px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #64748b 0%, #e2e8f0 35%, #ffffff 50%, #cbd5e1 65%, #475569 100%)",
+                      boxShadow: "0.5px 0 1.5px rgba(0,0,0,0.8)"
+                    };
+                  } else {
+                    stringWidth = "w-[0.8px]";
+                    stringStyle = {
+                      background: "linear-gradient(90deg, #94a3b8 0%, #f1f5f9 50%, #475569 100%)",
+                      boxShadow: "0.5px 0 1px rgba(0,0,0,0.75)"
+                    };
+                  }
+
+                  return (
+                    <div key={`course-${sIdx}`} className="h-full flex gap-[2.4px] justify-center items-center opacity-95 z-20">
+                      <div className={`h-full ${stringWidth}`} style={stringStyle} />
+                      <div className={`h-full ${stringWidth}`} style={stringStyle} />
+                    </div>
+                  );
+                }
               })}
             </div>
 
              {/* Clickable Note Badges Layer */}
             <div className="absolute inset-0 flex justify-around px-1 z-30 h-full">
               {stringsInOrder.map((stringBase, sIdx) => {
-                const originalIdx = tuning.notes.indexOf(stringBase);
+                const originalIdx = leftHanded ? tuning.notes.length - 1 - sIdx : sIdx;
                 return (
-                  <div key={`notes-course-${sIdx}`} className="h-full flex flex-col justify-between relative" style={{ width: "24px" }}>
+                  <div key={`notes-col-${sIdx}`} className="h-full flex flex-col justify-between relative" style={{ width: isGuitar ? "22px" : "24px" }}>
                     
                     {/* Fret spaces from 1 to 7 */}
                     {Array.from({ length: fretCount }).map((_, idx) => {
@@ -415,7 +470,7 @@ export const Fretboard: React.FC<FretboardProps> = ({
                               animate={{ scale: isPlaying ? 1.15 : 1, opacity: 1 }}
                               transition={{ type: "spring", stiffness: 300, damping: 20 }}
                               onClick={() => handlePlayNote(noteInfo.name, noteInfo.octave)}
-                              className="relative w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 rounded-full flex items-center justify-center text-xs font-black cursor-pointer active:scale-95 z-40 shadow-lg transition-all duration-150"
+                              className={`relative ${isGuitar ? "w-6.5 h-6.5 sm:w-7 sm:h-7 text-[10.5px]" : "w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 text-xs"} rounded-full flex items-center justify-center font-black cursor-pointer active:scale-95 z-40 shadow-lg transition-all duration-150`}
                               style={{ 
                                 backgroundColor: isRoot ? "#F27D26" : (NOTE_COLORS[noteInfo.name] || "rgba(255, 255, 255, 0.1)"),
                                 boxShadow: isPlaying

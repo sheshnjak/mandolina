@@ -5,7 +5,7 @@
 
 import React from "react";
 import { motion } from "motion/react";
-import { DoubleStop, generateDoubleStopsForScale } from "../types";
+import { DoubleStop, generateDoubleStopsForScale, InstrumentType, getNoteAtFret } from "../types";
 import { synth } from "../audio";
 import { Play, ArrowUpRight } from "lucide-react";
 import { TRANSLATIONS } from "../translations";
@@ -17,6 +17,7 @@ interface DoubleStopsProps {
   selectedDoubleStopIndex: number | null;
   onSelectDoubleStopIndex: (idx: number | null) => void;
   language?: "hr" | "en";
+  instrument?: InstrumentType;
 }
 
 export const DoubleStops: React.FC<DoubleStopsProps> = ({
@@ -25,41 +26,37 @@ export const DoubleStops: React.FC<DoubleStopsProps> = ({
   onSelectDoubleStop,
   selectedDoubleStopIndex,
   onSelectDoubleStopIndex,
-  language = "hr"
+  language = "hr",
+  instrument = "mandolin" as InstrumentType
 }) => {
   const t = TRANSLATIONS[language];
+  const isGuitar = instrument === "guitar";
 
-  // Generate/fetch double stops for the active root key and scale
+  const baseStringNotes = isGuitar
+    ? ["E2", "A2", "D3", "G3", "B3", "E4"]
+    : ["G3", "D4", "A4", "E5"];
+
+  const stringLabels = isGuitar
+    ? ["E", "A", "D", "G", "B", "E"]
+    : ["G", "D", "A", "E"];
+
+  // Generate/fetch double stops for the active root key, scale, and instrument
   const activeDoubleStops = React.useMemo(() => {
-    return generateDoubleStopsForScale(rootNote, scaleName);
-  }, [rootNote, scaleName]);
+    return generateDoubleStopsForScale(rootNote, scaleName, instrument as InstrumentType);
+  }, [rootNote, scaleName, instrument]);
 
   // Handle playing a double stop (both notes played closely)
   const handlePlayDoubleStop = (ds: DoubleStop) => {
-    const baseStringNotes = ["G3", "D4", "A4", "E5"];
-    
     // Play both notes of the double stop
     ds.strings.forEach((stringIdx, orderIdx) => {
       const fret = ds.frets[orderIdx];
-      const noteInfo = synth["ctx"] ? getNoteAtFretLocal(baseStringNotes[stringIdx], fret) : { name: ds.notes[orderIdx], octave: stringIdx + 3 };
+      const baseNote = baseStringNotes[stringIdx] || (isGuitar ? "E2" : "G3");
+      const noteInfo = getNoteAtFret(baseNote, fret);
       
       setTimeout(() => {
-        synth.playNote(noteInfo.name, noteInfo.octave, 1.4);
-      }, orderIdx * 20); // extreme micro-delay for realistic strum texture
+        synth.playNote(noteInfo.name, noteInfo.octave, 1.4, instrument as InstrumentType);
+      }, orderIdx * 20); // micro-delay for realistic strum texture
     });
-  };
-
-  // Local helper for frequency calculations
-  const getNoteAtFretLocal = (baseNote: string, fret: number) => {
-    const CHROMATIC_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-    const match = baseNote.match(/^([A-G]#?)([0-9])$/);
-    if (!match) return { name: "C", octave: 4 };
-    const noteName = match[1];
-    const startOctave = parseInt(match[2], 10);
-    const startIndex = CHROMATIC_NOTES.indexOf(noteName);
-    const targetIndex = (startIndex + fret) % 12;
-    const octavesShifted = Math.floor((startIndex + fret) / 12);
-    return { name: CHROMATIC_NOTES[targetIndex], octave: startOctave + octavesShifted };
   };
 
   const handleSelectDoubleStop = (ds: DoubleStop, idx: number) => {
@@ -119,7 +116,7 @@ export const DoubleStops: React.FC<DoubleStopsProps> = ({
                     {ds.name}
                   </span>
                   <span className="text-[10px] text-white/40 font-mono">
-                    {language === "en" ? "Strings" : "Žice"}: {ds.strings.map(s => ["G", "D", "A", "E"][s]).join(" + ")}
+                    {language === "en" ? "Strings" : "Žice"}: {ds.strings.map(s => stringLabels[s] || s).join(" + ")}
                   </span>
                 </div>
               </div>
@@ -135,8 +132,6 @@ export const DoubleStops: React.FC<DoubleStopsProps> = ({
           );
         })}
       </div>
-
-
 
     </div>
   );

@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { getFrequencyForNote } from "./types";
+import { getFrequencyForNote, InstrumentType } from "./types";
 
 class MandolinSynth {
   private ctx: AudioContext | null = null;
   private masterVolumeNode: GainNode | null = null;
-  private activeOscillators: { osc1: OscillatorNode; osc2: OscillatorNode; gainNode: GainNode }[] = [];
+  private activeOscillators: { osc1: OscillatorNode; osc2?: OscillatorNode; gainNode: GainNode }[] = [];
   private volume: number = 0.6; // Default volume (0.0 to 1.0)
+  private currentInstrument: InstrumentType = "mandolin";
   
   constructor() {
     // Lazy initialize to bypass browser autoplay policies
@@ -28,6 +29,10 @@ class MandolinSynth {
     }
   }
 
+  setInstrument(inst: InstrumentType) {
+    this.currentInstrument = inst;
+  }
+
   setVolume(vol: number) {
     this.volume = Math.max(0, Math.min(1, vol));
     if (this.masterVolumeNode && this.ctx) {
@@ -40,76 +45,122 @@ class MandolinSynth {
   }
 
   /**
-   * Plays a single plucked mandolin note (double strings chorused)
+   * Plays a single plucked note with instrument-specific acoustics
    */
-  playNote(noteName: string, octave: number, durationSec: number = 1.5) {
+  playNote(noteName: string, octave: number, durationSec: number = 1.6, instrument?: InstrumentType) {
     try {
       this.init();
       if (!this.ctx || !this.masterVolumeNode) return;
 
+      const inst = instrument || this.currentInstrument;
       const freq = getFrequencyForNote(noteName, octave);
       const now = this.ctx.currentTime;
+
+      // Adjust duration based on pitch (lower guitar notes ring longer)
+      const adjustedDuration = inst === "guitar" && octave <= 2 ? Math.max(durationSec, 2.0) : durationSec;
 
       // Create a gain node for this specific note's pluck envelope
       const noteGain = this.ctx.createGain();
       noteGain.gain.setValueAtTime(0, now);
       // Instant pluck attack
-      noteGain.gain.linearRampToValueAtTime(1.0, now + 0.005);
+      noteGain.gain.linearRampToValueAtTime(1.0, now + 0.004);
       // Plucked string decay
-      noteGain.gain.exponentialRampToValueAtTime(0.3, now + 0.15);
+      noteGain.gain.exponentialRampToValueAtTime(inst === "guitar" ? 0.35 : 0.3, now + 0.18);
       // Release to 0
-      noteGain.gain.exponentialRampToValueAtTime(0.001, now + durationSec);
+      noteGain.gain.exponentialRampToValueAtTime(0.001, now + adjustedDuration);
 
-      // MANDOLIN SPECIFIC: Two strings tuned to almost the exact same frequency,
-      // but slightly detuned to create the double-string (course) chorus effect!
-      const osc1 = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
+      if (inst === "guitar") {
+        // GUITAR ACOUSTIC TIMBRE: Warm fundamental + 2nd harmonic + woody body resonance
+        const osc1 = this.ctx.createOscillator();
+        osc1.type = "triangle";
+        osc1.frequency.setValueAtTime(freq, now);
 
-      // We mix Triangle (mellow pluck) with a bit of Sawtooth (metallic steel brightness)
-      // to model mandolin string acoustics
-      osc1.type = "triangle";
-      osc2.type = "triangle";
+        // Body resonance harmonic
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(freq * 2, now); // Octave overtone
 
-      osc1.frequency.setValueAtTime(freq, now);
-      osc2.frequency.setValueAtTime(freq, now);
+        const bodyGain = this.ctx.createGain();
+        bodyGain.gain.setValueAtTime(0.3, now);
+        bodyGain.gain.exponentialRampToValueAtTime(0.01, now + adjustedDuration * 0.8);
 
-      // Micro-detune standard mandolin strings (+3 cents and -3 cents)
-      osc1.detune.setValueAtTime(-4, now);
-      osc2.detune.setValueAtTime(4, now);
+        // Pluck bite (transient)
+        const clickOsc = this.ctx.createOscillator();
+        const clickGain = this.ctx.createGain();
+        clickOsc.type = "triangle";
+        clickOsc.frequency.setValueAtTime(freq * 3, now);
+        clickGain.gain.setValueAtTime(0.12, now);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
 
-      // Add a subtle high harmonic to simulate steel pluck click
-      const clickOsc = this.ctx.createOscillator();
-      const clickGain = this.ctx.createGain();
-      clickOsc.type = "sine";
-      clickOsc.frequency.setValueAtTime(freq * 3, now); // 3rd harmonic (bright/metallic)
-      clickGain.gain.setValueAtTime(0.15, now);
-      clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04); // decay extremely fast
+        osc1.connect(noteGain);
+        osc2.connect(bodyGain);
+        bodyGain.connect(noteGain);
+        clickOsc.connect(clickGain);
+        clickGain.connect(noteGain);
 
-      // Connect everything
-      osc1.connect(noteGain);
-      osc2.connect(noteGain);
-      clickOsc.connect(clickGain);
-      clickGain.connect(noteGain);
+        noteGain.connect(this.masterVolumeNode);
 
-      noteGain.connect(this.masterVolumeNode);
+        osc1.start(now);
+        osc2.start(now);
+        clickOsc.start(now);
 
-      // Start and Stop
-      osc1.start(now);
-      osc2.start(now);
-      clickOsc.start(now);
+        osc1.stop(now + adjustedDuration);
+        osc2.stop(now + adjustedDuration);
+        clickOsc.stop(now + adjustedDuration);
 
-      osc1.stop(now + durationSec);
-      osc2.stop(now + durationSec);
-      clickOsc.stop(now + durationSec);
+        const activeItem = { osc1, osc2, gainNode: noteGain };
+        this.activeOscillators.push(activeItem);
 
-      // Track active node for potential cleanup
-      const activeItem = { osc1, osc2, gainNode: noteGain };
-      this.activeOscillators.push(activeItem);
+        setTimeout(() => {
+          this.activeOscillators = this.activeOscillators.filter(item => item !== activeItem);
+        }, adjustedDuration * 1000 + 100);
 
-      // Clean up reference after note is done playing
-      setTimeout(() => {
-        this.activeOscillators = this.activeOscillators.filter(item => item !== activeItem);
-      }, durationSec * 1000 + 100);
+      } else {
+        // MANDOLIN SPECIFIC: Two strings tuned to almost the exact same frequency,
+        // slightly detuned to create the double-string (course) chorus effect!
+        const osc1 = this.ctx.createOscillator();
+        const osc2 = this.ctx.createOscillator();
+
+        osc1.type = "triangle";
+        osc2.type = "triangle";
+
+        osc1.frequency.setValueAtTime(freq, now);
+        osc2.frequency.setValueAtTime(freq, now);
+
+        // Micro-detune standard mandolin strings (+4 cents and -4 cents)
+        osc1.detune.setValueAtTime(-4, now);
+        osc2.detune.setValueAtTime(4, now);
+
+        // Add a subtle high harmonic to simulate steel pluck click
+        const clickOsc = this.ctx.createOscillator();
+        const clickGain = this.ctx.createGain();
+        clickOsc.type = "sine";
+        clickOsc.frequency.setValueAtTime(freq * 3, now);
+        clickGain.gain.setValueAtTime(0.15, now);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+        osc1.connect(noteGain);
+        osc2.connect(noteGain);
+        clickOsc.connect(clickGain);
+        clickGain.connect(noteGain);
+
+        noteGain.connect(this.masterVolumeNode);
+
+        osc1.start(now);
+        osc2.start(now);
+        clickOsc.start(now);
+
+        osc1.stop(now + durationSec);
+        osc2.stop(now + durationSec);
+        clickOsc.stop(now + durationSec);
+
+        const activeItem = { osc1, osc2, gainNode: noteGain };
+        this.activeOscillators.push(activeItem);
+
+        setTimeout(() => {
+          this.activeOscillators = this.activeOscillators.filter(item => item !== activeItem);
+        }, durationSec * 1000 + 100);
+      }
 
     } catch (e) {
       console.error("Failed to play note via Web Audio API", e);
@@ -187,7 +238,7 @@ class MandolinSynth {
     try {
       this.activeOscillators.forEach(item => {
         item.osc1.disconnect();
-        item.osc2.disconnect();
+        if (item.osc2) item.osc2.disconnect();
         item.gainNode.disconnect();
       });
       this.activeOscillators = [];

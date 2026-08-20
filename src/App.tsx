@@ -24,7 +24,13 @@ import {
   ALTERNATIVE_TUNINGS, 
   Tuning, 
   TabType,
-  CHORD_DICTIONARY
+  CHORD_DICTIONARY,
+  ChordDefinition,
+  InstrumentType,
+  getChordDictionary,
+  getAlternativeTunings,
+  MANDOLIN_STANDARD_TUNING,
+  GUITAR_STANDARD_TUNING
 } from "./types";
 import { TRANSLATIONS, LanguageType } from "./translations";
 import { Fretboard } from "./components/Fretboard";
@@ -107,6 +113,12 @@ export default function App() {
     return (saved === "en" || saved === "hr") ? saved : "hr";
   });
 
+  // Instrument selection state: "mandolin" or "guitar"
+  const [instrument, setInstrument] = React.useState<InstrumentType>(() => {
+    const saved = localStorage.getItem("mandolina_instrument");
+    return (saved === "guitar" || saved === "mandolin") ? saved : "mandolin";
+  });
+
   const t = TRANSLATIONS[language];
 
   // Application Primary State
@@ -117,26 +129,58 @@ export default function App() {
   
   // Customization & Settings State
   const [leftHanded, setLeftHanded] = React.useState<boolean>(false);
-  const [tuning, setTuning] = React.useState<Tuning>(STANDARD_TUNING);
+  const [tuning, setTuning] = React.useState<Tuning>(() => 
+    instrument === "guitar" ? GUITAR_STANDARD_TUNING : MANDOLIN_STANDARD_TUNING
+  );
   const [volume, setVolume] = React.useState<number>(0.6);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState<boolean>(false);
 
   // Active Chord/Double-stop overlays on fretboard
-  const [activeChordFrets, setActiveChordFrets] = React.useState<number[]>([0, 2, 3, 0]); // G Major default
+  const [activeChordFrets, setActiveChordFrets] = React.useState<number[]>(() => 
+    instrument === "guitar" ? [-1, 3, 2, 0, 1, 0] : [0, 0, 2, 3]
+  );
   const [activeDoubleStopFrets, setActiveDoubleStopFrets] = React.useState<{ stringIndex: number; fret: number }[]>([]);
   const [activeDoubleStopIdx, setActiveDoubleStopIdx] = React.useState<number | null>(null);
 
   const activeScale = SCALES[selectedScaleIndex];
+  const chordDictionary = React.useMemo(() => getChordDictionary(instrument), [instrument]);
+  const availableAlternativeTunings = React.useMemo(() => getAlternativeTunings(instrument), [instrument]);
 
   // Sync language with localStorage
   React.useEffect(() => {
     localStorage.setItem("mandolina_lang", language);
   }, [language]);
 
+  // Sync instrument with localStorage and audio synthesizer
+  React.useEffect(() => {
+    localStorage.setItem("mandolina_instrument", instrument);
+    synth.setInstrument(instrument);
+  }, [instrument]);
+
   // Set initial volume
   React.useEffect(() => {
     synth.setVolume(volume);
   }, [volume]);
+
+  // Handle instrument switch
+  const handleSwitchInstrument = (newInst: InstrumentType) => {
+    if (newInst === instrument) return;
+    setInstrument(newInst);
+    const newTuning = newInst === "guitar" ? GUITAR_STANDARD_TUNING : MANDOLIN_STANDARD_TUNING;
+    setTuning(newTuning);
+    
+    // Set default chord for new instrument
+    const newChordDict = getChordDictionary(newInst);
+    const keyChords = newChordDict[selectedRoot] || {};
+    const firstChord = Object.values(keyChords).flat()[0];
+    if (firstChord) {
+      setActiveChordFrets(firstChord.frets);
+    } else {
+      setActiveChordFrets(newInst === "guitar" ? [-1, 3, 2, 0, 1, 0] : [0, 0, 2, 3]);
+    }
+    setActiveDoubleStopFrets([]);
+    setActiveDoubleStopIdx(null);
+  };
 
   // Handle key select from circle of fifths
   const handleSelectKeyFromCircle = (root: string, scaleName: string) => {
@@ -158,9 +202,9 @@ export default function App() {
 
     let lastChordType = "Major";
     if (prevRoot) {
-      const prevKeyChords = CHORD_DICTIONARY[prevRoot] || {};
+      const prevKeyChords: Record<string, ChordDefinition[]> = chordDictionary[prevRoot] || {};
       outer: for (const [type, chords] of Object.entries(prevKeyChords)) {
-        for (const chord of chords) {
+        for (const chord of (chords as ChordDefinition[])) {
           if (chord.frets.join(",") === activeChordFrets.join(",")) {
             lastChordType = type;
             break outer;
@@ -169,31 +213,31 @@ export default function App() {
       }
     }
 
-    const keyChords = CHORD_DICTIONARY[selectedRoot] || {};
-    const sameTypeChords = keyChords[lastChordType] || [];
-    const firstChord = sameTypeChords[0] || Object.values(keyChords).flat()[0];
+    const keyChords: Record<string, ChordDefinition[]> = chordDictionary[selectedRoot] || {};
+    const sameTypeChords: ChordDefinition[] = keyChords[lastChordType] || [];
+    const firstChord: ChordDefinition | undefined = sameTypeChords[0] || Object.values(keyChords).flat()[0];
 
     if (firstChord) {
       setActiveChordFrets(firstChord.frets);
     } else {
-      setActiveChordFrets([0, 0, 2, 3]); // Fallback to G Major shape
+      setActiveChordFrets(instrument === "guitar" ? [-1, 3, 2, 0, 1, 0] : [0, 0, 2, 3]);
     }
     setActiveDoubleStopFrets([]);
     setActiveDoubleStopIdx(null);
-  }, [selectedRoot]);
+  }, [selectedRoot, chordDictionary, instrument]);
 
   // Dynamically resolve the active chord's name based on activeChordFrets and selectedRoot
   const activeChordName = React.useMemo(() => {
-    const keyChords = CHORD_DICTIONARY[selectedRoot] || {};
+    const keyChords: Record<string, ChordDefinition[]> = chordDictionary[selectedRoot] || {};
     for (const cat of Object.values(keyChords)) {
-      for (const chord of cat) {
+      for (const chord of (cat as ChordDefinition[])) {
         if (chord.frets.join(",") === activeChordFrets.join(",")) {
           return chord.name;
         }
       }
     }
     return undefined;
-  }, [selectedRoot, activeChordFrets]);
+  }, [selectedRoot, activeChordFrets, chordDictionary]);
 
   return (
     <div className="h-dvh bg-[#020202] text-zinc-100 flex items-center justify-center font-sans md:py-2 px-0 md:px-2 overflow-hidden">
@@ -227,9 +271,14 @@ export default function App() {
               <label className="text-[10px] font-bold text-white/40 tracking-wider uppercase font-mono">
                 {t["root_key"]}
               </label>
-              <span className="text-[10px] font-mono font-extrabold text-[#F27D26] bg-[#F27D26]/12 px-2 py-0.5 rounded border border-[#F27D26]/20">
-                {selectedRoot}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-mono uppercase text-white/40 px-1.5 py-0.2 bg-white/5 rounded border border-white/5">
+                  {instrument === "guitar" ? (language === "en" ? "Guitar" : "Gitara") : (language === "en" ? "Mandolin" : "Mandolina")}
+                </span>
+                <span className="text-[10px] font-mono font-extrabold text-[#F27D26] bg-[#F27D26]/12 px-2 py-0.5 rounded border border-[#F27D26]/20">
+                  {selectedRoot}
+                </span>
+              </div>
             </div>
             
             <div className="grid grid-cols-12 gap-[3px]">
@@ -370,6 +419,7 @@ export default function App() {
                   selectedChordName={activeChordName}
                   leftHanded={leftHanded}
                   language={language}
+                  instrument={instrument}
                 />
               </motion.div>
             )}
@@ -401,6 +451,7 @@ export default function App() {
                   selectedDoubleStopIndex={activeDoubleStopIdx}
                   onSelectDoubleStopIndex={setActiveDoubleStopIdx}
                   language={language}
+                  instrument={instrument}
                 />
               </motion.div>
             )}
@@ -517,6 +568,35 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Instrument Toggle (Mandolin vs Guitar Italian Tuning) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-white block">{t["instrument"]}</label>
+                  <div className="grid grid-cols-2 gap-2 bg-[#121214] p-1 rounded-xl border border-white/10">
+                    <button
+                      onClick={() => handleSwitchInstrument("mandolin")}
+                      className={`py-1.5 px-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        instrument === "mandolin"
+                          ? "bg-[#F27D26] text-white shadow"
+                          : "text-white/40 hover:text-white"
+                      }`}
+                      id="instrument-select-mandolin"
+                    >
+                      <span>🪕 {t["instrument_mandolin"]}</span>
+                    </button>
+                    <button
+                      onClick={() => handleSwitchInstrument("guitar")}
+                      className={`py-1.5 px-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        instrument === "guitar"
+                          ? "bg-[#F27D26] text-white shadow"
+                          : "text-white/40 hover:text-white"
+                      }`}
+                      id="instrument-select-guitar"
+                    >
+                      <span>🎸 {t["instrument_guitar"]}</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Language Option */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-white block">{t["language"]}</label>
@@ -585,13 +665,13 @@ export default function App() {
                   <select
                     value={tuning.name}
                     onChange={(e) => {
-                      const found = ALTERNATIVE_TUNINGS.find(t => t.name === e.target.value);
+                      const found = availableAlternativeTunings.find(t => t.name === e.target.value);
                       if (found) setTuning(found);
                     }}
                     className="w-full bg-[#121214] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#F27D26]"
                     id="settings-tuning-select"
                   >
-                    {ALTERNATIVE_TUNINGS.map(t => (
+                    {availableAlternativeTunings.map(t => (
                       <option key={t.name} value={t.name}>{t.name}</option>
                     ))}
                   </select>
